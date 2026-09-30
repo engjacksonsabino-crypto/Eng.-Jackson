@@ -1,54 +1,96 @@
 # Eng.-Jackson
 
-Este repositório contém uma planilha de controle de tutoria e agora inclui um dashboard web para visualizá-la.
+Este repositório foi reorganizado para suportar análise automatizada dos dados de controle de tutoria a partir da planilha Excel e geração de dashboard profissional.
 
-## O que foi criado
-
-- `index.html` — estrutura principal do painel
-- `styles.css` — layout e visual do dashboard
-- `script.js` — leitura da planilha Excel e geração dos gráficos
-- `GERENCIAMENTO CONTROLE JACKSON.xlsx` — arquivo base da planilha do projeto
-
-## Como usar
-
-1. Faça o download ou clone este repositório.
-2. Abra a pasta localmente em um servidor web simples.
-3. Acesse a página em um navegador.
-
-### Opção rápida com Python
-
-```bash
-cd Eng.-Jackson
-python -m http.server 8000
-```
-
-Depois abra:
+## Estrutura do projeto
 
 ```text
-http://localhost:8000
+Eng.-Jackson/
+├── dados/
+│   └── .gitkeep
+├── saidas/
+│   ├── graficos/
+│   └── relatorios/
+├── src/
+│   ├── __init__.py
+│   ├── analise.py
+│   ├── dashboard.py
+│   ├── relatorio.py
+│   ├── streamlit_app.py
+│   └── tratamento.py
+├── GERENCIAMENTO CONTROLE JACKSON.xlsx
+├── README.md
+├── requirements.txt
+└── .gitignore
 ```
 
-## O que o dashboard faz
+## Como configurar o ambiente
 
-- carrega a planilha Excel diretamente do repositório
-- identifica automaticamente colunas de status, datas e categorias
-- calcula indicadores gerais
-- monta gráficos e uma tabela resumida dos dados
+1. Crie um ambiente virtual:
+
+```bash
+python -m venv .venv
+```
+
+2. Ative o ambiente:
+
+Windows:
+```bash
+.venv\Scripts\activate
+```
+
+Linux/macOS:
+```bash
+source .venv/bin/activate
+```
+
+3. Instale as dependências:
+
+```bash
+pip install -r requirements.txt
+```
+
+## Como executar a análise
+
+### Aplicação Streamlit
+
+```bash
+streamlit run src/streamlit_app.py
+```
+
+A interface permite:
+- carregar a planilha Excel
+- visualizar indicadores gerais
+- analisar por ordem
+- consultar tutores e pendências
+- gerar relatório resumido
+
+## Regra de negócio aplicada
+
+O processamento está ajustado para respeitar as regras da planilha:
+
+- `X` = pendente
+- célula preenchida = gerenciou
+- célula vazia = sem registro
+- texto com variações de maiúsculas/minúsculas é normalizado
+- nomes de tutores e status são padronizados antes da análise
+- ordens e categorias são tratadas separadamente da situação de gerenciamento
+
+## Atualização automática
+
+Sempre que a planilha `GERENCIAMENTO CONTROLE JACKSON.xlsx` for substituída ou atualizada, basta executar novamente o projeto. O processo foi projetado para ser facilmente repetido sem alterar a lógica principal.
 
 ## Observações
 
-A lógica do dashboard tenta detectar automaticamente colunas comuns em uma planilha de tutoria como:
-
-- status / situação
-- data / agenda / período
-- disciplina / turma / matéria / tutor / aluno
-- valores numéricos para métricas
-
-Se os nomes das colunas da sua planilha forem diferentes, o script ainda assim tenta ajustar a leitura e montar o painel de forma automática.
+- Os dados originais da planilha não são alterados.
+- O sistema separa claramente:
+  - status do tutor
+  - status de gerenciamento
+  - evolução por ordem
+  - situação individual por tutor
 
 ## Próximos passos recomendados
 
-- personalizar títulos e cores para o perfil da sua gestão
-- adicionar filtros por aluno, disciplina ou período
-- integrar com uma API ou banco de dados
-- exportar relatórios em PDF ou Excel
+- validar os nomes reais das colunas da planilha exportada
+- ajustar os listados de categoria do tutor caso a base tenha nomenclaturas diferentes
+- incluir filtros específicos por tutor ou ordem na interface
