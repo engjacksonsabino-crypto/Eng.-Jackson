@@ -1,0 +1,66 @@
+"""Dashboard interativo com Streamlit para acompanhamento de tutoria."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pandas as pd
+import plotly.express as px
+import streamlit as st
+
+try:
+    from src.analise import AnaliseTutores
+    from src.tratamento import TratamentoDados
+except ImportError:
+    from analise import AnaliseTutores
+    from tratamento import TratamentoDados
+
+
+st.set_page_config(page_title="Controle de Tutoria", layout="wide")
+
+
+def carregar_dados() -> pd.DataFrame:
+    caminho = Path(__file__).resolve().parents[1] / "dados" / "GERENCIAMENTO CONTROLE JACKSON.xlsx"
+    tratamento = TratamentoDados(caminho)
+    df = tratamento.carregar_planilha()
+    return tratamento.processar_dados()
+
+
+st.title("Sistema de Análise de Tutoria")
+st.caption("Dashboard para acompanhamento operacional dos tutores")
+
+try:
+    df = carregar_dados()
+    analise = AnaliseTutores(df)
+    indicadores = analise.calcular_indicadores_gerais()
+    comparativo = analise.comparativo_ordens()
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Total de tutores", indicadores["total_tutores"])
+    col2.metric("Gerenciaram", indicadores["gerenciaram"])
+    col3.metric("Parcial", indicadores["parcial"])
+    col4.metric("Pendentes", indicadores["pendentes"])
+
+    st.subheader("Comparativo por ordem")
+    st.dataframe(comparativo, use_container_width=True)
+
+    if not comparativo.empty:
+        fig1 = px.bar(
+            comparativo,
+            x="ordem",
+            y=["gerenciaram", "parcial", "pendentes"],
+            barmode="group",
+            title="Gerenciados x Parciais x Pendentes por ordem",
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+
+    st.subheader("Resumo geral")
+    st.code(analise.gerar_resumo_texto(), language="text")
+
+except Exception as exc:
+    st.error(f"Erro ao carregar os dados: {exc}")
+    st.info("Certifique-se de que a planilha está na pasta /dados e a aba correta é '02semestre'.")
+
+
+if __name__ == "__main__":
+    pass
