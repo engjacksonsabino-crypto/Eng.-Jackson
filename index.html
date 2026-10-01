@@ -1,88 +1,51 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard de Controle de Tutoria</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  </head>
-  <body>
-    <div class="app-shell">
-      <aside class="sidebar">
-        <div class="brand">
-          <div class="brand-mark">J</div>
-          <div>
-            <p class="eyebrow">Controle</p>
-            <h1>Eng. Jackson</h1>
-          </div>
-        </div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Dashboard de Controle de Tutoria</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">J</div><div><p class="eyebrow">Controle</p><h1>Eng. Jackson</h1></div></div>
+      <nav class="menu" aria-label="Navegação principal">
+        <a class="active" href="#dashboard">Dashboard</a><a href="#graficos">Gráficos</a><a href="#tabela">Tabela</a>
+      </nav>
+      <div class="sidebar-card">
+        <p class="label">Arquivo de dados</p>
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
+        <label for="fileInput" class="upload-label">📁 Escolher planilha</label>
+        <p id="arquivoNome" class="file-name">Nenhum arquivo carregado</p>
+        <p class="hint">Excel ou CSV</p>
+      </div>
+    </aside>
 
-        <nav class="menu">
-          <a class="active" href="#dashboard">Dashboard</a>
-          <a href="#tabela">Tabela</a>
-          <a href="#graficos">Gráficos</a>
-        </nav>
+    <main class="content" id="dashboard">
+      <header class="topbar">
+        <div><p class="eyebrow">Painel de acompanhamento</p><h2>Controle de Tutoria</h2><p id="lastUpdate" class="subtitle">Carregue uma planilha para começar</p></div>
+        <div class="header-actions"><button id="recarregarBtn" class="secondary-btn">↻ Recarregar</button><button id="exportBtn" class="primary-btn">⤓ Exportar / Imprimir</button></div>
+      </header>
 
-        <div class="sidebar-card">
-          <p class="label">Arquivo de dados</p>
-          <div class="upload-zone">
-            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
-            <label for="fileInput" class="upload-label">Enviar planilha</label>
-          </div>
-          <p id="arquivoNome" class="file-name">Nenhum arquivo carregado</p>
-        </div>
-      </aside>
+      <section class="stats-grid" id="cardsContainer" aria-live="polite"></section>
 
-      <main class="content" id="dashboard">
-        <header class="topbar">
-          <div>
-            <p class="eyebrow">Painel de acompanhamento</p>
-            <h2>Controle de Tutoria</h2>
-          </div>
-          <div class="header-actions">
-            <button id="recarregarBtn" class="secondary-btn">Recarregar dados</button>
-            <button id="exportBtn" class="primary-btn">Exportar PDF</button>
-          </div>
-        </header>
+      <section class="panel" id="graficos"><div class="panel-head"><div><p class="section-kicker">ANÁLISE</p><h3>Visão geral</h3></div><span id="sheetName" class="badge">Aguardando dados</span></div>
+        <div class="charts-grid"><div class="chart-card large"><h4>Status dos registros</h4><div class="chart-box"><canvas id="chartStatus"></canvas></div></div><div class="chart-card"><h4>Registros por tutor</h4><div class="chart-box"><canvas id="chartDistribuicao"></canvas></div></div><div class="chart-card large"><h4>Distribuição por período</h4><div class="chart-box"><canvas id="chartTimeline"></canvas></div></div></div>
+      </section>
 
-        <section class="stats-grid" id="cardsContainer"></section>
-
-        <section class="panel" id="graficos">
-          <div class="panel-head">
-            <h3>Visão geral</h3>
-          </div>
-          <div class="charts-grid">
-            <div class="chart-card large">
-              <canvas id="chartStatus"></canvas>
-            </div>
-            <div class="chart-card">
-              <canvas id="chartDistribuicao"></canvas>
-            </div>
-            <div class="chart-card large">
-              <canvas id="chartTimeline"></canvas>
-            </div>
-          </div>
-        </section>
-
-        <section class="panel" id="tabela">
-          <div class="panel-head">
-            <h3>Dados tratados da planilha</h3>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead id="theadTable"></thead>
-              <tbody id="tbodyTable"></tbody>
-            </table>
-          </div>
-        </section>
-      </main>
-    </div>
-
-    <script src="script.js"></script>
-  </body>
+      <section class="panel" id="tabela"><div class="panel-head"><div><p class="section-kicker">DETALHAMENTO</p><h3>Dados da planilha</h3></div><span id="rowCount" class="badge">0 registros</span></div>
+        <div class="table-tools"><input id="searchInput" type="search" placeholder="🔎 Buscar na tabela..." aria-label="Buscar na tabela" /><select id="statusFilter" aria-label="Filtrar por status"><option value="">Todos os status</option></select></div>
+        <div class="table-wrap"><table><thead id="theadTable"></thead><tbody id="tbodyTable"></tbody></table><div id="emptyState" class="empty-state">Carregue uma planilha para visualizar os dados.</div></div>
+      </section>
+    </main>
+  </div>
+  <script src="script.js"></script>
+</body>
 </html>
