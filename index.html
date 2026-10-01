@@ -14,17 +14,75 @@
   <body>
     <div class="app-shell">
       <aside class="sidebar">
-        <div class="brand"><div class="brand-mark">J</div><div><p class="eyebrow">Controle</p><h1>Eng. Jackson</h1></div></div>
-        <nav class="menu"><a class="active" href="#dashboard">Dashboard</a><a href="#tabela">Tabela</a><a href="#graficos">Gráficos</a></nav>
-        <div class="sidebar-card"><p class="label">Arquivo de dados</p><div class="upload-zone"><input type="file" id="fileInput" accept=".xlsx,.xls,.csv" /><label for="fileInput" class="upload-label">Enviar planilha</label></div><p id="arquivoNome" class="file-name">Nenhum arquivo carregado</p></div>
+        <div class="brand">
+          <div class="brand-mark">J</div>
+          <div>
+            <p class="eyebrow">Controle</p>
+            <h1>Eng. Jackson</h1>
+          </div>
+        </div>
+
+        <nav class="menu">
+          <a class="active" href="#dashboard">Dashboard</a>
+          <a href="#tabela">Tabela</a>
+          <a href="#graficos">Gráficos</a>
+        </nav>
+
+        <div class="sidebar-card">
+          <p class="label">Arquivo de dados</p>
+          <div class="upload-zone">
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
+            <label for="fileInput" class="upload-label">Enviar planilha</label>
+          </div>
+          <p id="arquivoNome" class="file-name">Nenhum arquivo carregado</p>
+        </div>
       </aside>
+
       <main class="content" id="dashboard">
-        <header class="topbar"><div><p class="eyebrow">Painel de acompanhamento</p><h2>Controle de Tutoria</h2></div><div class="header-actions"><button id="recarregarBtn" class="secondary-btn">Recarregar dados</button><button id="exportBtn" class="primary-btn">Exportar PDF</button></div></header>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Painel de acompanhamento</p>
+            <h2>Controle de Tutoria</h2>
+          </div>
+          <div class="header-actions">
+            <button id="recarregarBtn" class="secondary-btn">Recarregar dados</button>
+            <button id="exportBtn" class="primary-btn">Exportar PDF</button>
+          </div>
+        </header>
+
         <section class="stats-grid" id="cardsContainer"></section>
-        <section class="panel" id="graficos"><div class="panel-head"><h3>Visão geral</h3></div><div class="charts-grid"><div class="chart-card large"><canvas id="chartStatus"></canvas></div><div class="chart-card"><canvas id="chartDistribuicao"></canvas></div><div class="chart-card large"><canvas id="chartTimeline"></canvas></div></div></section>
-        <section class="panel" id="tabela"><div class="panel-head"><h3>Dados tratados da planilha</h3></div><div class="table-wrap"><table><thead id="theadTable"></thead><tbody id="tbodyTable"></tbody></table></div></section>
+
+        <section class="panel" id="graficos">
+          <div class="panel-head">
+            <h3>Visão geral</h3>
+          </div>
+          <div class="charts-grid">
+            <div class="chart-card large">
+              <canvas id="chartStatus"></canvas>
+            </div>
+            <div class="chart-card">
+              <canvas id="chartDistribuicao"></canvas>
+            </div>
+            <div class="chart-card large">
+              <canvas id="chartTimeline"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" id="tabela">
+          <div class="panel-head">
+            <h3>Dados tratados da planilha</h3>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead id="theadTable"></thead>
+              <tbody id="tbodyTable"></tbody>
+            </table>
+          </div>
+        </section>
       </main>
     </div>
+
     <script src="script.js"></script>
   </body>
 </html>
