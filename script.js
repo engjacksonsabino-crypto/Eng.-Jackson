@@ -5,20 +5,24 @@ const state = {
   charts: {}
 };
 
-const statusLabels = {
-  completed: ['concluido', 'concluída', 'feito', 'finalizado', 'ok', 'aprovado', 'sim'],
-  pending: ['pendente', 'em andamento', 'andamento', 'aguardando', 'a fazer', 'nao', 'não'],
-  cancelled: ['cancelado', 'cancelada', 'não realizado', 'incompleto']
+const STATUS = {
+  completed: 'GERENCIOU',
+  partial: 'PARCIAL',
+  pending: 'PENDENTE',
+  none: 'SEM REGISTRO'
 };
 
-function normalizeHeader(value) {
-  return String(value || '')
+function normalizeText(value) {
+  return String(value ?? '')
     .trim()
-    .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
+    .replace(/\s+/g, ' ')
+    .toUpperCase();
+}
+
+function normalizeHeader(value) {
+  return normalizeText(value).replace(/[^A-Z0-9]+/g, ' ').trim();
 }
 
 function cleanCell(value) {
@@ -27,367 +31,223 @@ function cleanCell(value) {
   return String(value).trim();
 }
 
-function parseRowsFromFile(data) {
+function looksLikeSpreadsheetHeader(row) {
+  const headers = Object.keys(row).map(normalizeHeader);
+  return headers.some((header) => /TUTOR|ORDEM|STATUS|SITUACAO|GERENCIAMENTO/.test(header));
+}
+
+function parseRowsFromFile(data, fileName = '') {
+  const isCsv = /\.csv$/i.test(fileName);
   const workbook = XLSX.read(data, { type: 'array' });
-  const sheetName = workbook.SheetNames[0];
+  const preferredSheet = workbook.SheetNames.find((name) => normalizeHeader(name) === '02SEMESTRE');
+  const sheetName = preferredSheet || workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
-  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+  const options = { defval: '', raw: false };
+  let rows = XLSX.utils.sheet_to_json(sheet, isCsv ? options : { ...options, range: 3 });
+
+  // Some files already contain a compact header row. Fall back instead of
+  // treating the title/merged cells above it as column names.
+  if (!rows.length || !looksLikeSpreadsheetHeader(rows[0])) {
+    const allRows = XLSX.utils.sheet_to_json(sheet, options);
+    const headerIndex = allRows.findIndex(looksLikeSpreadsheetHeader);
+    if (headerIndex >= 0) {
+      rows = XLSX.utils.sheet_to_json(sheet, { ...options, range: headerIndex });
+    }
+  }
 
   if (!rows.length) return null;
-
   const headers = Object.keys(rows[0]);
-  const normalizedHeaders = headers.map((header) => ({ raw: header, normalized: normalizeHeader(header) }));
-
-  const mapped = rows.map((row) => {
-    const obj = {};
-    for (const col of Object.keys(row)) {
-      obj[col] = cleanCell(row[col]);
-    }
-    return obj;
-  });
-
-  return { rows: mapped, headers: normalizedHeaders, sheetName };
+  return {
+    rows: rows.map((row) => Object.fromEntries(headers.map((key) => [key, cleanCell(row[key])]))),
+    headers: headers.map((raw) => ({ raw, normalized: normalizeHeader(raw) })),
+    sheetName
+  };
 }
 
-function getBestFieldName(rows, candidates) {
-  const allKeys = rows.length ? Object.keys(rows[0]) : [];
-  const map = allKeys.map((key) => ({ key, normalized: normalizeHeader(key) }));
-
+function findField(headers, candidates) {
+  const normalized = headers.map((key) => ({ key, value: normalizeHeader(key) }));
   for (const candidate of candidates) {
-    const match = map.find((item) => item.normalized.includes(candidate));
+    const match = normalized.find(({ value }) => value === candidate || value.includes(candidate));
     if (match) return match.key;
   }
-
-  return allKeys[0] || '';
+  return '';
 }
 
-function getNumericColumns(rows) {
-  const allKeys = rows.length ? Object.keys(rows[0]) : [];
-  return allKeys.filter((key) => {
-    const values = rows.map((row) => Number(row[key])).filter((num) => !Number.isNaN(num));
-    return values.length > 0 && values.length >= Math.max(1, Math.ceil(rows.length * 0.2));
+function getOrderFields(headers) {
+  return headers.filter((header) => {
+    const normalized = normalizeHeader(header);
+    return normalized.includes('ORDEM') || /^0?[1-9]$/.test(normalized) || /^ORDEM\s+0?[1-9]+/.test(normalized);
   });
 }
 
-function safeNumber(value) {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : 0;
+function orderLabel(header) {
+  const normalized = normalizeHeader(header);
+  const match = normalized.match(/(?:ORDEM\s*)?(\d+)/);
+  return match ? `ORDEM ${match[1].padStart(2, '0')}` : 'GERAL';
 }
 
-function formatMetric(value, type = 'number') {
-  if (type === 'percent') return `${value.toFixed(1)}%`;
-  if (type === 'currency') return `R$ ${value.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}`;
-  return value.toLocaleString('pt-BR');
+function normalizeStatus(value) {
+  const text = normalizeText(value);
+  if (!text || ['NAN', 'NONE', 'NULL', 'NA', '_EMPTY'].includes(text)) return STATUS.none;
+  if (text === 'X' || /PENDENTE|AGUARDANDO|NAO GERENCIADO/.test(text)) return STATUS.pending;
+  if (/PARCIAL/.test(text)) return STATUS.partial;
+  if (/GERENCIAD|GERENCIOU|OK|REALIZAD|CONCLUID|ATENDID|FEITO/.test(text)) return STATUS.completed;
+  return text;
 }
 
-function statusSummary(rows) {
-  const statusField = getBestFieldName(rows, ['status', 'situacao', 'estado', 'resultado']);
-  const values = rows.map((row) => String(row[statusField] || '').trim().toLowerCase());
+function buildModel(sourceRows) {
+  if (!sourceRows.length) return { records: [], headers: [], tutorField: '', orderFields: [] };
+  const headers = Object.keys(sourceRows[0]);
+  const tutorField = findField(headers, ['TUTOR', 'NOME DO TUTOR', 'RESPONSAVEL', 'NOME']);
+  const statusField = findField(headers, ['STATUS DO TUTOR', 'STATUS TUTOR', 'SITUACAO DO TUTOR']);
+  const orderFields = getOrderFields(headers);
+  const fields = orderFields.length ? orderFields : [statusField || tutorField];
+  const records = [];
 
-  if (!statusField || values.every((v) => !v)) {
-    return {
-      labels: ['Sem status'],
-      data: [rows.length || 1],
-      field: null
-    };
-  }
-
-  const counts = {};
-  for (const value of values) {
-    if (!value) continue;
-    const normalized = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const found = Object.keys(statusLabels).find((key) => {
-      const aliases = statusLabels[key];
-      return aliases.some((alias) => normalized.includes(alias));
+  sourceRows.forEach((row) => {
+    const tutor = normalizeText(row[tutorField]);
+    if (!tutor) return;
+    fields.forEach((field) => {
+      records.push({
+        TUTOR: tutor,
+        STATUS_TUTOR: normalizeText(row[statusField]) || STATUS.none,
+        ORDEM: orderFields.length ? orderLabel(field) : 'GERAL',
+        GERENCIAMENTO: normalizeStatus(row[field]),
+        VALOR_ORIGINAL: cleanCell(row[field])
+      });
     });
-    const key = found || normalized;
-    counts[key] = (counts[key] || 0) + 1;
-  }
-
-  return {
-    labels: Object.keys(counts),
-    data: Object.values(counts),
-    field: statusField
-  };
+  });
+  return { records, headers, tutorField, orderFields };
 }
 
-function distributionSummary(rows) {
-  const categoryField = getBestFieldName(rows, ['tutor', 'professor', 'aluno', 'estudante', 'disciplina', 'materia', 'curso', 'tipo', 'categoria', 'turma']);
-  const values = rows.map((row) => String(row[categoryField] || '').trim()).filter(Boolean);
-
-  if (!categoryField || !values.length) return null;
-
-  const counts = {};
-  for (const value of values) {
-    counts[value] = (counts[value] || 0) + 1;
-  }
-
-  return {
-    labels: Object.keys(counts),
-    data: Object.values(counts),
-    field: categoryField
-  };
-}
-
-function timelineSummary(rows) {
-  const dateField = getBestFieldName(rows, ['data', 'date', 'dt', 'periodo', 'mes', 'semana', 'dia', 'data aula']);
-  const values = rows.map((row) => row[dateField]).filter((v) => v !== '' && v !== undefined && v !== null);
-
-  if (!dateField || !values.length) return null;
-
-  const parsed = values
-    .map((value) => {
-      const d = new Date(value);
-      if (Number.isNaN(d.getTime())) return null;
-      return { label: d.toLocaleDateString('pt-BR', { month: 'short', day: 'numeric' }), date: d };
-    })
-    .filter(Boolean);
-
-  if (!parsed.length) return null;
-
-  const counts = {};
-  for (const item of parsed) {
-    counts[item.label] = (counts[item.label] || 0) + 1;
-  }
-
-  return {
-    labels: Object.keys(counts),
-    data: Object.values(counts),
-    field: dateField
-  };
-}
-
-function renderStats(rows) {
-  const cardsContainer = document.getElementById('cardsContainer');
-  cardsContainer.innerHTML = '';
-
-  const total = rows.length;
-  const numericField = getNumericColumns(rows)[0] || null;
-  const numericValues = numericField ? rows.map((row) => safeNumber(row[numericField])).filter((value) => value > 0) : [];
-  const avg = numericValues.length ? numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length : 0;
-
-  const status = statusSummary(rows);
-  const completedCount = status.field ? status.data[status.labels.findIndex((label) => label.includes('completed'))] || 0 : 0;
-  const percentCompleted = total ? ((completedCount / total) * 100) : 0;
-  const uniqueCategories = new Set(
-    rows.flatMap((row) => Object.values(row).map((value) => String(value).trim())).filter(Boolean)
-  ).size;
-
-  const metrics = [
-    { title: 'Registros', value: formatMetric(total), icon: '📊', hint: 'Linhas registradas' },
-    { title: 'Concluídos', value: formatMetric(percentCompleted, 'percent'), icon: '✅', hint: 'de registros finalizados' },
-    { title: 'Categorias', value: formatMetric(uniqueCategories), icon: '🏷️', hint: 'itens únicos no conjunto' },
-    { title: 'Média', value: numericField ? formatMetric(avg, 'number') : '—', icon: '📈', hint: numericField ? `média em ${numericField}` : 'sem dados numéricos' }
-  ];
-
-  metrics.forEach((meta) => {
-    const card = document.createElement('article');
-    card.className = 'stat-card';
-    card.innerHTML = `
-      <div class="stat-icon">${meta.icon}</div>
-      <p>${meta.title}</p>
-      <h3>${meta.value}</h3>
-      <span>${meta.hint}</span>
-    `;
-    cardsContainer.appendChild(card);
+function tutorStatuses(records) {
+  const grouped = new Map();
+  records.forEach((record) => {
+    if (!grouped.has(record.TUTOR)) grouped.set(record.TUTOR, []);
+    grouped.get(record.TUTOR).push(record.GERENCIAMENTO);
+  });
+  return [...grouped].map(([tutor, values]) => {
+    let status = STATUS.none;
+    if (values.length && values.every((value) => value === STATUS.completed)) status = STATUS.completed;
+    else if (values.length && values.every((value) => value === STATUS.pending)) status = STATUS.pending;
+    else if (values.some((value) => value === STATUS.completed || value === STATUS.partial)) status = STATUS.partial;
+    return { tutor, status };
   });
 }
 
-function renderTable(rows) {
-  const thead = document.getElementById('theadTable');
-  const tbody = document.getElementById('tbodyTable');
+function countBy(values) {
+  return values.reduce((result, value) => {
+    result[value] = (result[value] || 0) + 1;
+    return result;
+  }, {});
+}
 
-  if (!rows.length) {
-    thead.innerHTML = '<tr><th>Dados</th></tr>';
-    tbody.innerHTML = '<tr><td class="empty-state">Nenhuma linha encontrada na planilha.</td></tr>';
-    return;
-  }
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString('pt-BR');
+}
 
-  const headers = Object.keys(rows[0]);
-  thead.innerHTML = `
-    <tr>${headers.map((header) => `<th>${header}</th>`).join('')}</tr>
-  `;
+function renderStats(records) {
+  const tutors = tutorStatuses(records);
+  const counts = countBy(tutors.map((item) => item.status));
+  const total = tutors.length;
+  const managed = counts[STATUS.completed] || 0;
+  const partial = counts[STATUS.partial] || 0;
+  const pending = counts[STATUS.pending] || 0;
+  const metrics = [
+    { title: 'Tutores', value: formatNumber(total), icon: '👥', hint: 'tutores únicos na planilha', tone: 'blue' },
+    { title: 'Gerenciaram', value: `${total ? ((managed / total) * 100).toFixed(1) : '0.0'}%`, icon: '✓', hint: `${formatNumber(managed)} tutor(es) com todas as ordens`, tone: 'green' },
+    { title: 'Pendências', value: formatNumber(pending), icon: '!', hint: 'tutores ainda pendentes', tone: 'orange' },
+    { title: 'Parciais', value: formatNumber(partial), icon: '↗', hint: 'tutores com gerenciamento parcial', tone: 'purple' }
+  ];
+  const container = document.getElementById('cardsContainer');
+  container.innerHTML = metrics.map((metric) => `
+    <article class="stat-card ${metric.tone}">
+      <div class="stat-icon">${metric.icon}</div>
+      <p>${metric.title}</p>
+      <h3>${metric.value}</h3>
+      <span>${metric.hint}</span>
+    </article>
+  `).join('');
+}
 
-  tbody.innerHTML = rows
-    .slice(0, 50)
-    .map((row) => {
-      return `<tr>${headers
-        .map((header) => `<td>${String(row[header] ?? '').slice(0, 100)}</td>`)
-        .join('')}</tr>`;
-    })
-    .join('');
+function renderTable(records) {
+  const headers = ['TUTOR', 'STATUS_TUTOR', 'ORDEM', 'GERENCIAMENTO'];
+  document.getElementById('theadTable').innerHTML = `<tr>${headers.map((header) => `<th>${header}</th>`).join('')}</tr>`;
+  document.getElementById('tbodyTable').innerHTML = records.length
+    ? records.slice(0, 100).map((row) => `<tr>${headers.map((header) => `<td>${row[header] || '—'}</td>`).join('')}</tr>`).join('')
+    : '<tr><td colspan="4" class="empty-state">Nenhum tutor encontrado na planilha.</td></tr>';
 }
 
 function buildChart(elementId, config) {
-  if (state.charts[elementId]) {
-    state.charts[elementId].destroy();
-  }
-
-  const ctx = document.getElementById(elementId);
-  if (!ctx) return;
-
-  state.charts[elementId] = new Chart(ctx, config);
+  if (state.charts[elementId]) state.charts[elementId].destroy();
+  const canvas = document.getElementById(elementId);
+  if (canvas) state.charts[elementId] = new Chart(canvas, config);
 }
 
-function renderCharts(rows) {
-  const status = statusSummary(rows);
-  const distribution = distributionSummary(rows);
-  const timeline = timelineSummary(rows);
-
-  const chartStatusConfig = {
+function renderCharts(records) {
+  const tutors = tutorStatuses(records);
+  const status = countBy(tutors.map((item) => item.status));
+  const labels = [STATUS.completed, STATUS.partial, STATUS.pending, STATUS.none].filter((label) => status[label]);
+  const colors = ['#16a34a', '#f59e0b', '#ef4444', '#94a3b8'];
+  buildChart('chartStatus', {
     type: 'doughnut',
-    data: {
-      labels: status.labels.length ? status.labels : ['Sem status'],
-      datasets: [
-        {
-          label: status.field ? `Status (${status.field})` : 'Status',
-          data: status.data.length ? status.data : [1],
-          backgroundColor: ['#2563eb', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#f472b6']
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'bottom' }
-      }
-    }
-  };
+    data: { labels: labels.length ? labels : ['Sem dados'], datasets: [{ data: labels.length ? labels.map((label) => status[label]) : [1], backgroundColor: colors, borderWidth: 0 }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: { position: 'bottom' } } }
+  });
 
-  buildChart('chartStatus', chartStatusConfig);
+  const byOrder = countBy(records.filter((row) => row.GERENCIAMENTO === STATUS.pending).map((row) => row.ORDEM));
+  const orderLabels = Object.keys(byOrder).sort();
+  buildChart('chartDistribuicao', {
+    type: 'bar',
+    data: { labels: orderLabels.length ? orderLabels : ['Sem pendências'], datasets: [{ label: 'Pendências', data: orderLabels.length ? orderLabels.map((label) => byOrder[label]) : [0], backgroundColor: '#f97316', borderRadius: 8 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+  });
 
-  if (distribution) {
-    buildChart('chartDistribuicao', {
-      type: 'bar',
-      data: {
-        labels: distribution.labels.slice(0, 10),
-        datasets: [
-          {
-            label: distribution.field,
-            data: distribution.data.slice(0, 10),
-            backgroundColor: '#60a5fa'
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false }
-        },
-        scales: {
-          y: { beginAtZero: true }
-        }
-      }
-    });
-  } else {
-    buildChart('chartDistribuicao', {
-      type: 'bar',
-      data: {
-        labels: ['Sem categoria'],
-        datasets: [{ data: [1], backgroundColor: '#cbd5e1' }]
-      },
-      options: { responsive: true, maintainAspectRatio: false }
-    });
-  }
-
-  if (timeline) {
-    buildChart('chartTimeline', {
-      type: 'line',
-      data: {
-        labels: timeline.labels.slice(0, 15),
-        datasets: [
-          {
-            label: timeline.field,
-            data: timeline.data.slice(0, 15),
-            borderColor: '#1d4ed8',
-            backgroundColor: 'rgba(59,130,246,0.2)',
-            fill: true,
-            tension: 0.35
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          y: { beginAtZero: true }
-        }
-      }
-    });
-  } else {
-    buildChart('chartTimeline', {
-      type: 'line',
-      data: {
-        labels: ['Sem data'],
-        datasets: [{ label: 'Dados', data: [0], borderColor: '#94a3b8', fill: false }]
-      },
-      options: { responsive: true, maintainAspectRatio: false }
-    });
-  }
+  const byOrderTotal = countBy(records.map((row) => row.ORDEM));
+  const byOrderManaged = countBy(records.filter((row) => row.GERENCIAMENTO === STATUS.completed).map((row) => row.ORDEM));
+  const timelineLabels = Object.keys(byOrderTotal).sort();
+  buildChart('chartTimeline', {
+    type: 'line',
+    data: { labels: timelineLabels.length ? timelineLabels : ['Sem ordens'], datasets: [{ label: '% gerenciado', data: timelineLabels.map((label) => ((byOrderManaged[label] || 0) / byOrderTotal[label]) * 100), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.12)', fill: true, tension: .35, pointRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100, ticks: { callback: (value) => `${value}%` } } } }
+  });
 }
 
-function renderDashboard(rows) {
-  if (!rows || !rows.length) {
-    document.getElementById('cardsContainer').innerHTML = `
-      <div class="alert" style="grid-column: 1 / -1;">
-        ⚠️ Envie uma planilha para começar a visualizar o dashboard.
-      </div>
-    `;
+function renderDashboard(records) {
+  if (!records.length) {
+    document.getElementById('cardsContainer').innerHTML = '<div class="alert" style="grid-column:1/-1">⚠️ Envie a planilha de controle para visualizar os indicadores corretos.</div>';
+    renderTable([]);
     return;
   }
-
-  renderStats(rows);
-  renderTable(rows);
-  renderCharts(rows);
+  renderStats(records);
+  renderTable(records);
+  renderCharts(records);
 }
 
 function handleFileUpload(event) {
   const file = event.target.files?.[0];
   if (!file) return;
-
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
-      const buffer = e.target?.result;
-      if (!buffer) throw new Error('Não foi possível ler o arquivo.');
-
-      const parsed = parseRowsFromFile(buffer);
-
-      if (!parsed) {
-        throw new Error('A planilha está vazia ou em um formato não suportado.');
-      }
-
-      state.rows = parsed.rows;
+      const parsed = parseRowsFromFile(e.target.result, file.name);
+      if (!parsed) throw new Error('A planilha está vazia ou não possui uma linha de cabeçalho válida.');
+      const model = buildModel(parsed.rows);
+      if (!model.records.length) throw new Error('Não foi possível identificar tutores na planilha.');
+      state.rows = model.records;
       state.headers = parsed.headers;
       state.workbookName = file.name;
-
-      document.getElementById('arquivoNome').textContent = `✓ ${file.name}`;
+      document.getElementById('arquivoNome').textContent = `✓ ${file.name} · aba ${parsed.sheetName}`;
       renderDashboard(state.rows);
     } catch (error) {
       alert(`Erro ao carregar o arquivo: ${error.message}`);
       document.getElementById('arquivoNome').textContent = 'Erro ao carregar';
     }
   };
-
   reader.readAsArrayBuffer(file);
 }
 
 document.getElementById('fileInput').addEventListener('change', handleFileUpload);
-
-document.getElementById('recarregarBtn').addEventListener('click', () => {
-  if (state.rows.length) {
-    renderDashboard(state.rows);
-  } else {
-    alert('Carregue uma planilha primeiro.');
-  }
-});
-
-document.getElementById('exportBtn').addEventListener('click', () => {
-  alert('Funcionalidade de exportação em desenvolvimento. Use Print (Ctrl+P) para salvar como PDF.');
-});
-
-window.addEventListener('DOMContentLoaded', () => {
-  renderDashboard([]);
-});
+document.getElementById('recarregarBtn').addEventListener('click', () => renderDashboard(state.rows));
+document.getElementById('exportBtn').addEventListener('click', () => window.print());
+window.addEventListener('DOMContentLoaded', () => renderDashboard([]));
