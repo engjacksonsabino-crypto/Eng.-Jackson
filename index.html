@@ -1,81 +1,10 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard de Controle de Tutoria</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  </head>
-  <body>
-    <div class="app-shell">
-      <aside class="sidebar">
-        <div class="brand">
-          <div class="brand-mark">J</div>
-          <div>
-            <p class="eyebrow">Controle</p>
-            <h1>Eng. Jackson</h1>
-          </div>
-        </div>
-
-        <nav class="menu">
-          <a class="active" href="#">Dashboard</a>
-          <a href="#tabela">Tabela</a>
-          <a href="#graficos">Gráficos</a>
-        </nav>
-
-        <div class="sidebar-card">
-          <p class="label">Arquivo</p>
-          <strong id="arquivoNome">Carregando planilha...</strong>
-        </div>
-      </aside>
-
-      <main class="content">
-        <header class="topbar">
-          <div>
-            <p class="eyebrow">Painel de acompanhamento</p>
-            <h2>Controle de Tutoria</h2>
-          </div>
-          <button id="recarregarBtn" class="primary-btn">Recarregar dados</button>
-        </header>
-
-        <section class="stats-grid" id="cardsContainer"></section>
-
-        <section class="panel" id="graficos">
-          <div class="panel-head">
-            <h3>Gráficos</h3>
-          </div>
-          <div class="charts-grid">
-            <div class="chart-card large">
-              <canvas id="chartStatus"></canvas>
-            </div>
-            <div class="chart-card">
-              <canvas id="chartDistribuicao"></canvas>
-            </div>
-            <div class="chart-card large">
-              <canvas id="chartTimeline"></canvas>
-            </div>
-          </div>
-        </section>
-
-        <section class="panel" id="tabela">
-          <div class="panel-head">
-            <h3>Dados da planilha</h3>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead id="theadTable"></thead>
-              <tbody id="tbodyTable"></tbody>
-            </table>
-          </div>
-        </section>
-      </main>
-    </div>
-
-    <script src="script.js"></script>
-  </body>
-</html>
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controle de Tutoria | Eng. Jackson</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css"><script src="https://cdn.jsdelivr.net/npm/chart.js"></script><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body><div class="app-shell"><aside class="sidebar"><div class="brand"><div class="brand-mark">J</div><div><p class="eyebrow">Gestão operacional</p><h1>Eng. Jackson</h1></div></div><nav class="menu"><a class="active" href="#inicio">Visão geral</a><a href="#graficos">Indicadores</a><a href="#tabela">Tutores</a></nav><div class="sidebar-card"><span class="label">Fonte dos dados</span><strong id="arquivoNome">02semestre</strong><small id="ultimaAtualizacao">Aguardando leitura</small></div></aside><main class="content" id="inicio"><header class="topbar"><div><p class="eyebrow">Painel de acompanhamento</p><h2>Controle de Tutoria</h2><p class="subtitle">Acompanhe o gerenciamento dos tutores por ordem.</p></div><button id="recarregarBtn" class="primary-btn">↻ Atualizar dados</button></header><section class="filters panel"><div><label for="ordemFiltro">Ordem</label><select id="ordemFiltro"><option value="TODAS">Todas as ordens</option></select></div><div><label for="statusFiltro">Situação</label><select id="statusFiltro"><option value="TODOS">Todas as situações</option><option>GERENCIOU</option><option>PARCIAL</option><option>PENDENTE</option><option>SEM REGISTRO</option></select></div><div class="search-box"><label for="tutorFiltro">Buscar tutor</label><input id="tutorFiltro" placeholder="Digite o nome..."></div><button id="limparFiltros" class="secondary-btn">Limpar filtros</button></section><section class="stats-grid" id="cardsContainer"></section><section class="panel" id="graficos"><div class="panel-head"><div><h3>Indicadores de gerenciamento</h3><p class="panel-note">Valores calculados exclusivamente da aba 02semestre.</p></div></div><div class="charts-grid"><div class="chart-card"><h4>Situação atual</h4><canvas id="chartStatus"></canvas></div><div class="chart-card"><h4>Gerenciados por Ordem</h4><canvas id="chartOrdem"></canvas></div><div class="chart-card wide"><h4>Comparativo por Ordem</h4><canvas id="chartComparativo"></canvas></div></div></section><section class="panel" id="tabela"><div class="panel-head"><div><h3>Acompanhamento dos tutores</h3><p class="panel-note" id="contadorTabela">0 registros</p></div></div><div class="table-wrap"><table><thead id="theadTable"></thead><tbody id="tbodyTable"></tbody></table></div></section></main></div><script src="script.js"></script></body></html>
